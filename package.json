@@ -1,0 +1,27 @@
+{
+  "name": "acc-extension-config-server",
+  "version": "0.1.1",
+  "description": "Script made for providing access to AC extension configs",
+  "main": "index.js",
+  "scripts": {
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ac-custom-shaders-patch/acc-extension-config-server.git"
+  },
+  "keywords": [
+    "assetto corsa",
+    "assettocorsa"
+  ],
+  "author": "x4fab",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ac-custom-shaders-patch/acc-extension-config-server/issues"
+  },
+  "homepage": "https://github.com/ac-custom-shaders-patch/acc-extension-config-server#readme",
+  "dependencies": {
+    "basic-ftp": "^3.4.4",
+    "jszip": "^3.2.1",
+    "xxhashjs": "^0.2.2"
+  }
+}
