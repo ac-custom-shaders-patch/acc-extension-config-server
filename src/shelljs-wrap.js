@@ -17,6 +17,7 @@ process.on('beforeExit', () => {
 });
 
 // Extended JS entities:
+Array.prototype.groupBy = function(c) { return this.reduce((rv, x) => { let k = c(x); (rv[k] = rv[k] || []).push(x); return rv; }, {}); };
 Array.prototype.contains = function(v) { for (let i = 0; i < this.length; i++) { if(this[i] === v) return true; } return false; };
 Array.prototype.unique = function() { let arr = []; for (let i = 0; i < this.length; i++) { if(!arr.contains(this[i])) { arr.push(this[i]); } } return arr; }
 String.prototype.tab = function (s) { if (typeof s === 'number') s = ' '.repeat(s); return s + this.replace(/\n/g, '\n' + s); }
@@ -185,7 +186,10 @@ global.β = { config: { colorful: true } };
     if (busy) return save();
     dirty = false;
     busy = true;
-    fs.writeFile(n, JSON.stringify(store), () => busy = false);
+    fs.writeFile(n + '.tmp', JSON.stringify(store), () => {
+      $.mv(n + '.tmp', n);
+      busy = false;
+    });
   }, 100);
   β.storage = new Proxy({}, {
     get: (o, k) => store[k],

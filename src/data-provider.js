@@ -38,6 +38,9 @@ class DataProvider extends EventEmitter {
 
   warn(msg, source){
     $.echo(β.yellow(`[${this.remoteStorage.dir}] ${msg}`));
+    if (config.printSource){
+      $.echo(β.grey(`  source: ${source || this._currentEntrySourceUrl}`));
+    }
     if (!this.warnings.contains(msg)){
       this.warnings.push({ message: msg, severity: 'warning', source: source || this._currentEntrySourceUrl });
     }
@@ -45,6 +48,9 @@ class DataProvider extends EventEmitter {
 
   error(msg, source){
     $.echo(β.red(`[${this.remoteStorage.dir}] ${msg}`));
+    if (config.printSource){
+      $.echo(β.grey(`  source: ${source || this._currentEntrySourceUrl}`));
+    }
     if (!this.warnings.contains(msg)){
       this.warnings.push({ message: msg, severity: 'error', source: source || this._currentEntrySourceUrl });
     }
@@ -102,14 +108,24 @@ class DataProvider extends EventEmitter {
 
   getWarningsHtmlResponse(){
     function formatItem(x){
-      if (x.source){
-        return `<li><a href="${x.source}"${x.severity === 'error' ? ' style="color:brown"' : ''}>${x.message}</a></li>`;
-      } else {
-        return `<li${x.severity === 'error' ? ' style="color:brown"' : ''}>${x.message}</li>`;
+      return `<li${x.severity === 'error' ? ' style="color:brown"' : ''}>${x.message}</li>`;
+    }
+
+    let content = null;
+    if (!this._requestWarningsResponse){
+      content = '<p>Not ready yet…</p>';
+    } else if (this.warnings.length === 0){
+      content = `<p>No warnings 👌</p>`;
+    } else {
+      content = '';
+      let grouped = this.warnings.groupBy(x => x.source);
+      for (let g in grouped){
+        content += `<h4><a href="${g}">${g.match(/([^\\//]+)(\.\w+)?$/)[1]}</a></h4>`;
+        content += `<ul>${grouped[g].map(formatItem).join('')}</ul>`;
       }
     }
 
-    const content = !this._requestWarningsResponse ? '<p>Not ready yet…</p>' : this.warnings.length > 0 ? `<ul>${this.warnings.map(formatItem).join('')}</ul>` : `<p>No warnings 👌</p>`;
+    // const content = !this._requestWarningsResponse ? '<p>Not ready yet…</p>' : this.warnings.length > 0 ? `<ul>${this.warnings.map(formatItem).join('')}</ul>` : `<p>No warnings 👌</p>`;
     const fixTimeScript = `<script>with(document.querySelector('span'))textContent=new Date(textContent).toLocaleString()</script>`;
     const style = `<style>body{font-family:sans-serif;margin:20px 80px}li:after{content:";"}li:last-child:after{content:"."}</style>`;
     const footer = !this._requestWarningsResponse ? '' : `<footer><p>Last build time: <span>${this._lastBuildTime}</span>${fixTimeScript}</p></footer>`;
@@ -130,6 +146,7 @@ class DataProvider extends EventEmitter {
       color = this.warnings.some(x => x.severity === 'error') ? '#e05d44' : '#fe7d37';
     }
     let prefixWidth = name.length * 6 + 8;
+    if (name == 'backgrounds') prefixWidth += 10;
     // let prefixWidth = name.length * 6 + [].filter.call(name, x => x === x.toUpperCase()).length + 8;
     let msgWidth = msg.length * 6 + 8;
     let imgWidth = prefixWidth + msgWidth;
@@ -181,7 +198,7 @@ class DataProvider extends EventEmitter {
       version++;
       storage[storageKeyVersion] = version;
       storage[storageKeyChecksum] = info.checksum;
-      isNew = false;
+      isNew = true;
     }
     return { version: '' + (version + config.versionOffset), checksum: info.checksum, size: info.size, isNew: isNew };
   }
@@ -354,8 +371,9 @@ class DataProvider extends EventEmitter {
     let info = this.setVersionForInfo(await this.extendFileInfo({ checksum: baseChecksum }, extraFiles), id);
     const storageKeySize = `${packed}:size`;
     if (info.isNew || !fs.existsSync(packed)) {
-      await $.zip(files, { to: packed });
-      storage[storageKeySize] = info.size = (await fs.promises.stat(packed)).size;
+      await $.zip(files, { to: `${packed}.tmp` });
+      storage[storageKeySize] = info.size = (await fs.promises.stat(`${packed}.tmp`)).size;
+      $.mv(`${packed}.tmp`, packed);
     } else {
       info = Object.assign({
         size: +(storage[storageKeySize] || (await fs.promises.stat(packed)).size)
@@ -370,7 +388,7 @@ class DataProvider extends EventEmitter {
       { key: `${id}.ini`, data: fullConfig.data }
     ].concat(extraModels.map(x => ({ key: x, file: `${path.dirname(source)}/${x}` })).filter(x => {
       if (!fs.existsSync(x.file)) {
-        this.warn(`Included file is missing: ${x.file.substr(this.dataDir.length + 1)} (${source.substr(this.dataDir.length + 1)})`);
+        this.warn(`Included file is missing: ${x.file.substr(this.dataDir.length + 1)}`);
         return false;
       }
       return true;
