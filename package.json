@@ -3,8 +3,7 @@
   "version": "0.1.1",
   "description": "Script made for providing access to AC extension configs",
   "main": "index.js",
-  "scripts": {
-  },
+  "scripts": {},
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ac-custom-shaders-patch/acc-extension-config-server.git"
@@ -21,7 +20,10 @@
   "homepage": "https://github.com/ac-custom-shaders-patch/acc-extension-config-server#readme",
   "dependencies": {
     "basic-ftp": "^3.4.4",
+    "binary-parser": "^1.3.2",
     "jszip": "^3.2.1",
+    "node-gzip": "^1.1.2",
+    "node-stream-zip": "^1.8.0",
     "xxhashjs": "^0.2.2"
   }
 }

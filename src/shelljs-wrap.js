@@ -142,10 +142,10 @@ $.zip = (list, options) => new Promise((resolve, reject) => {
           add((Lkey ? Lkey + '/' : '') + (k === true ? a : k), fs.readFileSync(b));
         }
       });
-    } else if (L.file && Lkey){
-      add(Lkey, fs.readFileSync(L.file));
     } else if (L.data && Lkey){
       add(Lkey, L.data);
+    } else if (L.file && Lkey){
+      add(Lkey, fs.readFileSync(L.file));
     }
     function add(key, value){
       if (options.checksum){
@@ -176,8 +176,8 @@ global.β = { config: { colorful: true } };
 β.hrToMs = m => m[0] * 1e3 + Math.round(m[1] / 1000000);
 β.extensionIs = function(){ let a = [].slice.call(arguments); return m => /(\.\w+)$/.test(m) && a.indexOf(RegExp.$1.toLowerCase()) !== -1 };
 
-β.setStorage = (n, setGlobal = true) => {
-  if (β.storage) throw new Error('β.setStorage: storage is already set');
+β.setStorage = (n, setGlobal = true, setβ = true, key = 'storage') => {
+  if (β[key]) throw new Error('β.setStorage: storage is already set');
   let store = {};
   try { store = fs.existsSync(n) ? JSON.parse(fs.readFileSync(n)) : {}; } catch (e){ $.fail(e); }
   let dirty = false, busy = false;
@@ -191,15 +191,19 @@ global.β = { config: { colorful: true } };
       busy = false;
     });
   }, 100);
-  β.storage = new Proxy({}, {
+  let result = new Proxy({}, {
     get: (o, k) => store[k],
     set: (o, k, v) => { dirty = true; store[k] = v; save(); return true; },
     deleteProperty: (o, k) => { dirty = true; delete store[k]; save(); return true; },
     has: (o, k) => store.hasOwnProperty(k)
   });
-  if (setGlobal){
-    global.storage = β.storage;
+  if (setβ){
+    β[key] = result;
   }
+  if (setGlobal){
+    global[key] = result;
+  }
+  return result;
 };
 
 // From https://github.com/robertklep/top-level-await:

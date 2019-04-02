@@ -1,4 +1,5 @@
 const DataProvider = require('./data-provider');
+const StreamZip = require('node-stream-zip');
 
 class DataTracksVao extends DataProvider {
   async prepareContext(){ 
@@ -11,8 +12,28 @@ class DataTracksVao extends DataProvider {
     return await $.globAsync(`${dataDir}/*.vao-patch`); 
   }
 
+  async testPatch(filename){
+    return new Promise((resolve, reject) => {
+      const zip = new StreamZip({ file: filename, storeEntries: false });
+      let done = false;
+      zip.on('error', reject);
+      zip.on('entry', e => {
+        if (e.name === 'Patch.data' && !e.isDirectory){
+          zip.close();
+          if (!done) { resolve(); done = true; }
+        }
+      });
+
+      zip.on('ready', () => {
+        zip.close();
+        if (!done) { reject('Patch.data not found'); done = true; }
+      });
+    });
+  }
+
   async processEntry(source, relativeName, context){
     let id = relativeName.replace(/\.vao-patch$/i, '');
+    await this.testPatch(source);
     return Object.assign({
       id: id,
       author: context.contributors[id],

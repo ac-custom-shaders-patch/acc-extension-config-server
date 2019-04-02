@@ -52,13 +52,6 @@ function resolveIncludesWithFiles(filename, dataDir, sourceUrl, warningCallback)
               fullFilesList.push(`${dir}/${name}`);
               return result;
             }
-            /* let result = readText(`${dir}/${name}`);
-            let foundDir = path.dirname(`${dir}/${name}`);
-            if (!extraSearchDirs.contains(foundDir)) {
-              extraSearchDirs.push(foundDir);
-            }
-            fullFilesList.push(`${dir}/${name}`);
-            return result; */
           }
         }
       }
@@ -82,12 +75,10 @@ function resolveIncludesWithFiles(filename, dataDir, sourceUrl, warningCallback)
   return { data: prefix + cleaned, files: fullFilesList };
 }
 
-function getExtraModels(parsedConfig){
+async function getExtraModels(parsedConfig){
   let result = [];
-  for (let n in parsedConfig){
-    if (/^MODEL_REPLACEMENT_/.test(n)){
-      result.push(parsedConfig[n]['INSERT']);
-    }
+  for (let n of Object.keys(parsedConfig).filter(x => /^MODEL_REPLACEMENT_\d/.test(x))){
+    result.push(parsedConfig[n]['INSERT']);
   }
   return result.filter(x => x).unique();
 }

@@ -7,8 +7,7 @@ if (config.autoReload) fs.watch(__dirname, { recursive: true }, () => process.ex
 β.setStorage(`${config.dataDir}/data.json`);
 
 // this thing would update files to FTP if enabled
-const RemoteStorage = require('./src/remote-storage')
-await RemoteStorage.connect();
+const RemoteStorage = require('./src/remote-storage');
 
 // syncers check git status and pull things from time to time
 const Syncer = require('./src/syncer');
@@ -16,21 +15,18 @@ const syncerConfigs = new Syncer(config.dataDir, 'acc-extension-config', 'https:
 const syncerVao = new Syncer(config.dataDir, 'acc-extension-extra-vao', 'https://github.com/ac-custom-shaders-patch/acc-extension-extra-vao');
 
 // these thingies listen to syncers, collect and process data and drop data to RemoteStorage
-const dataBackgrounds = new (require('./src/data-backgrounds'))(syncerConfigs, 'backgrounds', new RemoteStorage('backgrounds', '.jpg'));
 const dataCarsConfigs = new (require('./src/data-cars-configs'))(syncerConfigs, 'config/cars', new RemoteStorage('cars-configs', '.zip'));
-const dataCarsTextures = new (require('./src/data-cars-textures'))(syncerConfigs, 'textures/cars', new RemoteStorage('cars-textures', '.zip'), dataCarsConfigs);
-const dataTracksConfigs = new (require('./src/data-tracks-configs'))(syncerConfigs, 'config/tracks', new RemoteStorage('tracks-configs', '.zip'));
-const dataTracksVao = new (require('./src/data-tracks-vao'))(syncerVao, '', new RemoteStorage('tracks-vao', '.vao-patch'));
+const data = {
+  'backgrounds': new (require('./src/data-backgrounds'))(syncerConfigs, 'backgrounds', new RemoteStorage('backgrounds', '.jpg')),
+  'car-configs': dataCarsConfigs,
+  'car-textures': new (require('./src/data-cars-textures'))(syncerConfigs, 'textures/cars', new RemoteStorage('cars-textures', '.zip'), dataCarsConfigs),
+  'track-configs': new (require('./src/data-tracks-configs'))(syncerConfigs, 'config/tracks', new RemoteStorage('tracks-configs', '.zip')),
+  'track-vao': new (require('./src/data-tracks-vao'))(syncerVao, '', new RemoteStorage('tracks-vao', '.vao-patch')),
+};
 
 // optional server which would redirect requests to data collecting thingies
 const Server = require('./src/server');
-Server.run({
-  'backgrounds': dataBackgrounds,
-  'car-configs': dataCarsConfigs,
-  'car-textures': dataCarsTextures,
-  'track-configs': dataTracksConfigs,
-  'track-vao': dataTracksVao,
-});
+Server.run(data);
 
 // launching syncers
 await syncerConfigs.initialize();

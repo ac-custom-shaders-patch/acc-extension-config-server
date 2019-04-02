@@ -1,5 +1,6 @@
 const DataProvider = require('./data-provider');
 const INIHelper = require('./ini-helper');
+const config = require('../config');
 
 function getTexturePacks(parsedConfig){
   let result = [];
@@ -17,6 +18,12 @@ function getTexturePacks(parsedConfig){
 class DataCarsConfigs extends DataProvider {
   async listEntries(dataDir, context){
     return (await $.globAsync(`${dataDir}/**/*.ini`)).filter(x => !/\/_|\/common\/|\/gen_/.test(x)); 
+  }
+
+  async getOriginalModels(source){
+    let id = path.basename(source, '.ini');
+    let targetObj = `${config.acRootDir}/content/cars/${id}`;
+    return fs.existsSync(targetObj) ? await $.globAsync(`${targetObj}/*.kn5`) : [];
   }
 
   async processEntry(source, relativeName, context){

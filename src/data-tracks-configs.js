@@ -1,5 +1,7 @@
 const DataProvider = require('./data-provider');
 const INIHelper = require('./ini-helper');
+const KN5 = require('./kn5-helper').KN5;
+const config = require('../config');
 const defines = require('../patch-defines');
 
 class DataTracksConfigs extends DataProvider {
@@ -7,7 +9,13 @@ class DataTracksConfigs extends DataProvider {
     return (await $.globAsync(`${dataDir}/**/*.ini`)).filter(x => !/\/_|\/common\/|\/gen_/.test(x));
   }
 
-  analyzeForWarnings(source, sourceUrl, parsedConfig) {
+  async getOriginalModels(source){
+    let id = path.basename(source, '.ini');
+    let targetObj = `${config.acRootDir}/content/tracks/${id}`;
+    return fs.existsSync(targetObj) ? await $.globAsync(`${targetObj}/*.kn5`) : [];
+  }
+
+  async analyzeForWarnings(source, sourceUrl, parsedConfig) {
     let readSource = $.readText(source);
     let duplicateSections = [];
     INIHelper.parseIni(readSource, {
@@ -32,6 +40,56 @@ class DataTracksConfigs extends DataProvider {
     });
 
     if (!parsedConfig) parsedConfig = readSource;
+
+    let originalModels = await this.getOriginalModels(source);
+    let kn5Files = null;
+    let kn5Prefix = `<b>Please note:</b> it could be just that compiling script doesn’t have the right version of this track to check. Because of that, those kind of errors aren’t taken into account in that counting badge. Still, it could be that they would help to detect some typos?\n\n`;
+
+    if (originalModels.length){
+      kn5Files = [];
+      for (let f of originalModels){
+        kn5Files.push(await KN5.create(f));
+      }
+      for (let k of Object.keys(parsedConfig).filter(x => /^MODEL_REPLACEMENT_\d/.test(x))) {
+        let obj = parsedConfig[k];
+        if (!obj['INSERT'] || !obj['INSERT_AFTER']) continue;
+        if (!kn5Files.filter(x => !obj['FILE'] || obj['FILE'] === path.basename(x.filename)).some(x => x.nodes().some(y => y.name == obj['INSERT_AFTER']))){
+          this.suggestion(`Node “${obj['INSERT_AFTER']}” for INSERT_AFTER for “${k}” might be missing`, null, kn5Prefix);
+        }
+        let insertFilename = `${path.dirname(source)}/${obj['INSERT']}`;
+        if (fs.existsSync(insertFilename)){
+          try {
+            let kn5 = await KN5.create(insertFilename);
+            if (kn5){
+              kn5Files.push(kn5);
+            }
+          } catch (e){}
+        }
+      }
+    }
+
+    const testKn5Files = k => {
+      let obj = parsedConfig[k];
+
+      if (kn5Files && obj['MESH']){
+        for (let m of obj['MESH'].split(',').map(x => x.trim()).filter(x => x && !kn5Files.some(y => y.findMeshes(x.trim()).length))){
+          this.suggestion(`Mesh for “${k}” might be missing: ${m}`, null, `${kn5Prefix}Found meshes:\n${kn5Files.map(y => y.meshes()).flat(Infinity).map(x => `• ${x.name}`).unique().sort().join(';\n')}.`);
+        }
+      }
+
+      if (kn5Files && obj['MESHES']){
+        for (let m of obj['MESHES'].split(',').map(x => x.trim()).filter(x => x && !kn5Files.some(y => y.findMeshes(x.trim()).length))){
+          this.suggestion(`Mesh for “${k}” might be missing: ${m}`, null, `${kn5Prefix}Found meshes:\n${kn5Files.map(y => y.meshes()).flat(Infinity).map(x => `• ${x.name}`).unique().sort().join(';\n')}.`);
+        }
+      }
+
+      if (kn5Files && obj['MATERIALS']){
+        for (let m of obj['MATERIALS'].split(',').map(x => x.trim()).filter(x => x && !kn5Files.some(y => y.findMaterials(x.trim()).length))){
+          this.suggestion(`Material for “${k}” might be missing: ${m}`, null, `${kn5Prefix}Found materials:\n${kn5Files.map(y => y.materials).flat(Infinity).map(x => `• ${x.name}`).unique().sort().join(';\n')}.`);
+        }
+      }
+    };
+
     let conditions = Object.keys(parsedConfig).filter(x => /^CONDITION_\d/.test(x));
     let conditionNames = conditions.map(x => parsedConfig[x]['NAME']);
 
@@ -50,7 +108,7 @@ class DataTracksConfigs extends DataProvider {
       }
     }
 
-    for (let k of Object.keys(parsedConfig).filter(x => /^(?:MODEL_REPLACEMENT)_/.test(x))) {
+    for (let k of Object.keys(parsedConfig).filter(x => /^MODEL_REPLACEMENT_\d/.test(x))) {
       let obj = parsedConfig[k];
       for (let u of Object.keys(obj).filter(x => !defines.trackModelReplacementKeys.contains(x))) {
         this.warn(`Unknown key “${u}” for “${k}”`);
@@ -65,6 +123,7 @@ class DataTracksConfigs extends DataProvider {
 
     for (let k of Object.keys(parsedConfig).filter(x => /^LIGHT_\d/.test(x))) {
       let obj = parsedConfig[k];
+      testKn5Files(k);
       for (let u of Object.keys(obj).filter(x => !/^(?:UV_FILTER_)$/.test(x) && !defines.trackLightKeys.contains(x))) {
         if (u === 'COLOR_OFF' && obj[u] === '0') continue;
         this.warn(`Unknown key “${u}” for “${k}”`);
@@ -76,6 +135,7 @@ class DataTracksConfigs extends DataProvider {
 
     for (let k of Object.keys(parsedConfig).filter(x => /^LIGHT_SERIES_\d/.test(x))) {
       let obj = parsedConfig[k];
+      testKn5Files(k);
       for (let u of Object.keys(obj).filter(x => !/^(?:UV_FILTER_|POSITION_|DIRECTION_)$/.test(x) && !defines.trackLightSeriesKeys.contains(x))) {
         if (u === 'COLOR_OFF' && obj[u] === '0') continue;
         this.warn(`Unknown key “${u}” for “${k}”`);
@@ -90,6 +150,7 @@ class DataTracksConfigs extends DataProvider {
 
     for (let k of Object.keys(parsedConfig).filter(x => /^MESH_ADJUSTMENT_\d/.test(x))) {
       let obj = parsedConfig[k];
+      testKn5Files(k);
       if (!obj.hasOwnProperty('MESHES')) {
         this.warn(`Mesh adjustment “${k}” has to have “MESHES”`);
       }
@@ -100,6 +161,7 @@ class DataTracksConfigs extends DataProvider {
 
     for (let k of Object.keys(parsedConfig).filter(x => /^MATERIAL_ADJUSTMENT_\d/.test(x))) {
       let obj = parsedConfig[k];
+      testKn5Files(k);
 
       if (!obj.hasOwnProperty('MESHES') && !obj.hasOwnProperty('MATERIALS')) {
         this.warn(`Material adjustment “${k}” has to have either “MESHES” or “MATERIALS”`);
@@ -193,9 +255,8 @@ class DataTracksConfigs extends DataProvider {
 
   async preRefresh() {
     for (let file of await $.globAsync(`${this.dataDir}/common/*.ini`)) {
-      this.analyzeForWarnings(file, this.getSourceUrl(file.substr(this.dataDir.length + 1)));
+      await this.analyzeForWarnings(file, this.getSourceUrl(file.substr(this.dataDir.length + 1)));
     }
-    // this.analyzeForWarnings(source, parsedConfig);
   }
 
   async processEntry(source, relativeName, context) {
@@ -204,7 +265,7 @@ class DataTracksConfigs extends DataProvider {
 
     let fullConfig = await this.getConfigInfo(source, id);
     let parsedConfig = INIHelper.parseIni(fullConfig.data);
-    this.analyzeForWarnings(source, null, parsedConfig);
+    await this.analyzeForWarnings(source, null, parsedConfig);
     let info = await this.packExtraModels(id, source, fullConfig, parsedConfig);
     return this.includeAboutInfo(info, parsedConfig);
   }

@@ -3,11 +3,13 @@ const xxhashjs = require('xxhashjs');
 const zlib = require('zlib');
 const config = require('../config');
 const INIHelper = require('./ini-helper');
+const KN5 = require('./kn5-helper').KN5;
 
 class DataProvider extends EventEmitter {
   constructor(syncer, subDir, remoteStorage) {
     super();
 
+    this.suggestion = this.suggestion.bind(this);
     this.warn = this.warn.bind(this);
     this.error = this.error.bind(this);
     this.info = this.info.bind(this);
@@ -36,27 +38,37 @@ class DataProvider extends EventEmitter {
     syncer.on('update', this.onUpdate);
   }
 
-  warn(msg, source){
-    $.echo(β.yellow(`[${this.remoteStorage.dir}] ${msg}`));
-    if (config.printSource){
-      $.echo(β.grey(`  source: ${source || this._currentEntrySourceUrl}`));
-    }
-    if (!this.warnings.contains(msg)){
-      this.warnings.push({ message: msg, severity: 'warning', source: source || this._currentEntrySourceUrl });
+  suggestion(msg, source, hint) {
+    // $.echo(`[${this.remoteStorage.dir}] ${msg}`);
+    // if (config.printSource) {
+    //   $.echo(β.grey(`  source: ${source || this._currentEntrySourceUrl}`));
+    // }
+    if (!this.warnings.contains(msg)) {
+      this.warnings.push({ message: msg, severity: 'suggestion', source: source || this._currentEntrySourceUrl, hint: hint });
     }
   }
 
-  error(msg, source){
+  warn(msg, source, hint) {
+    // $.echo(β.yellow(`[${this.remoteStorage.dir}] ${msg}`));
+    // if (config.printSource) {
+    //   $.echo(β.grey(`  source: ${source || this._currentEntrySourceUrl}`));
+    // }
+    if (!this.warnings.contains(msg)) {
+      this.warnings.push({ message: msg, severity: 'warning', source: source || this._currentEntrySourceUrl, hint: hint });
+    }
+  }
+
+  error(msg, source, hint) {
     $.echo(β.red(`[${this.remoteStorage.dir}] ${msg}`));
-    if (config.printSource){
+    if (config.printSource) {
       $.echo(β.grey(`  source: ${source || this._currentEntrySourceUrl}`));
     }
-    if (!this.warnings.contains(msg)){
-      this.warnings.push({ message: msg, severity: 'error', source: source || this._currentEntrySourceUrl });
+    if (!this.warnings.contains(msg)) {
+      this.warnings.push({ message: msg, severity: 'error', source: source || this._currentEntrySourceUrl, hint: hint });
     }
   }
 
-  info(msg, source){
+  info(msg, source) {
     $.echo(β.blue(`[${this.remoteStorage.dir}] ${msg}`));
   }
 
@@ -101,48 +113,57 @@ class DataProvider extends EventEmitter {
     return this._requestWarningsResponse;
   }
 
-  getName(){
+  getName() {
     return this.remoteStorage.dir.replace(/-|\bdev\b/g, ' ').replace(/\bvao\b/, _ => _.toUpperCase())
       .replace(/\b([a-z])([a-z])/g, (_, a, b) => a.toUpperCase() + b).trim();
   }
 
-  getWarningsHtmlResponse(){
-    function formatItem(x){
-      return `<li${x.severity === 'error' ? ' style="color:brown"' : ''}>${x.message}</li>`;
+  getWarningsHtmlResponse() {
+    function formatItem(x) {
+      let hint = x.hint ? ` <span onclick='alert(${JSON.stringify(x.hint)})' style='cursor:pointer;text-decoration:underline'>(more)</span>` : '';
+      return `<li${x.severity === 'error' ? ' style="color:brown"' : x.severity === 'suggestion' ? ' style="color:cadetblue"' : ''}>${x.message}${hint}</li>`;
     }
 
     let content = null;
-    if (!this._requestWarningsResponse){
+    if (!this._requestWarningsResponse) {
       content = '<p>Not ready yet…</p>';
-    } else if (this.warnings.length === 0){
+    } else if (this.warnings.length === 0) {
       content = `<p>No warnings 👌</p>`;
     } else {
       content = '';
       let grouped = this.warnings.groupBy(x => x.source);
-      for (let g in grouped){
+      for (let g in grouped) {
         content += `<h4><a href="${g}">${g.match(/([^\\//]+)(\.\w+)?$/)[1]}</a></h4>`;
         content += `<ul>${grouped[g].map(formatItem).join('')}</ul>`;
       }
     }
 
     // const content = !this._requestWarningsResponse ? '<p>Not ready yet…</p>' : this.warnings.length > 0 ? `<ul>${this.warnings.map(formatItem).join('')}</ul>` : `<p>No warnings 👌</p>`;
-    const fixTimeScript = `<script>with(document.querySelector('span'))textContent=new Date(textContent).toLocaleString()</script>`;
-    const style = `<style>body{font-family:sans-serif;margin:20px 80px}li:after{content:";"}li:last-child:after{content:"."}</style>`;
-    const footer = !this._requestWarningsResponse ? '' : `<footer><p>Last build time: <span>${this._lastBuildTime}</span>${fixTimeScript}</p></footer>`;
-  return `<meta charset="utf-8">${style}<h1>${this.getName()}</h1>${content}${footer}`;
+    const fixTimeScript = `<script>with(document.querySelector('#date'))textContent=new Date(textContent).toLocaleString()</script>`;
+    const style = `<style>body{font-family:sans-serif;margin:20px 80px}li:after{content:";"}li:last-child:after{content:"."}
+      div{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;padding:20px 80px;background:white;white-space:pre-line}
+      button{position:fixed;top:20px;right:20px}</style>`;
+    const script = `<script>function alert(msg){
+      document.body.appendChild(document.createElement('div')).innerHTML = msg;
+      document.querySelector('div').appendChild(document.createElement('button')).textContent = '×';
+      document.querySelector('button').onclick = () => document.body.removeChild(document.querySelector('div'));
+      }</script>`;
+    const footer = !this._requestWarningsResponse ? '' : `<footer><p>Last build time: <span id='date'>${this._lastBuildTime}</span>${fixTimeScript}</p></footer>`;
+    return `<meta charset="utf-8">${style}${script}<h1>${this.getName()}</h1>${content}${footer}`;
   }
 
-  getWarningsSvgResponse(){
+  getWarningsSvgResponse() {
     let name = this.getName().toLowerCase();
     let msg, color;
+    let warnings = this.warnings.filter(x => x.severity !== 'suggestion').length;
     if (!this._requestWarningsResponse) {
       msg = 'not ready yet'
       color = '#9f9f9f';
-    } else if (this.warnings.length == 0){
+    } else if (warnings == 0) {
       msg = 'no warnings';
       color = '#4c1';
     } else {
-      msg = this.warnings.length === 1 ? '1 warning' : `${this.warnings.length} warnings`;
+      msg = warnings === 1 ? '1 warning' : `${warnings} warnings`;
       color = this.warnings.some(x => x.severity === 'error') ? '#e05d44' : '#fe7d37';
     }
     let prefixWidth = name.length * 6 + 8;
@@ -208,7 +229,7 @@ class DataProvider extends EventEmitter {
   }
 
   async getConfigInfo(filename, id) {
-    let config = INIHelper.resolveIncludesWithFiles(filename, this.dataDir, this.getSourceUrl(filename.substr(this.dataDir.length + 1)), this.warn);
+    let config = INIHelper.resolveIncludesWithFiles(filename, this.dataDir, this.getSourceUrl(filename.substr(this.dataDir.length + 1)), this.error);
     let result = await this.extendFileInfo(await this.getFileInfo(filename), config.files);
     return Object.assign(result, { data: config.data });
   }
@@ -244,7 +265,7 @@ class DataProvider extends EventEmitter {
       return;
     }
     this._syncingWithRemote = true;
-    await this.remoteStorage.sync(this._requestResponse.raw, { 
+    await this.remoteStorage.sync(this._requestResponse.raw, {
       svg: new Buffer(this.getWarningsSvgResponse(), 'utf-8'),
       html: new Buffer(this.getWarningsHtmlResponse(), 'utf-8'),
       json: this._requestWarningsResponse.raw,
@@ -303,6 +324,10 @@ class DataProvider extends EventEmitter {
 
   async prepareContext() { }
 
+  async getOriginalModels(source) {
+    throw new Error(`Not implemented: getOriginalModels`);
+  }
+
   async listEntries(dataDir, context) {
     throw new Error(`Not implemented: listEntries`);
   }
@@ -336,7 +361,7 @@ class DataProvider extends EventEmitter {
     if (this._expectingUpdate) return;
     this._expectingUpdate = true;
 
-    if (!this.isReady){      
+    if (!this.isReady) {
       $.mkdir('-p', this.dataDir);
       if (config.dataAutoReload) {
         fs.watch(this.dataDir, { recursive: true }, this.onUpdate);
@@ -349,7 +374,7 @@ class DataProvider extends EventEmitter {
     }, delay == null ? (this.isReady() ? 3e3 : 0) : delay);
   }
 
-  isReady(){
+  isReady() {
     return Object.keys(this.files).length > 0;
   }
 
@@ -371,6 +396,11 @@ class DataProvider extends EventEmitter {
     let info = this.setVersionForInfo(await this.extendFileInfo({ checksum: baseChecksum }, extraFiles), id);
     const storageKeySize = `${packed}:size`;
     if (info.isNew || !fs.existsSync(packed)) {
+      for (let item of files) {
+        if (item.dataCallback) {
+          item.data = await item.dataCallback();
+        }
+      }
       await $.zip(files, { to: `${packed}.tmp` });
       storage[storageKeySize] = info.size = (await fs.promises.stat(`${packed}.tmp`)).size;
       $.mv(`${packed}.tmp`, packed);
@@ -383,16 +413,40 @@ class DataProvider extends EventEmitter {
   }
 
   async packExtraModels(id, source, fullConfig, parsedConfig) {
-    let extraModels = INIHelper.getExtraModels(parsedConfig);
+    let extraModelsRaw = await INIHelper.getExtraModels(parsedConfig);
+    let extraModels = [];
+    let originalModels = await Promise.all((await this.getOriginalModels(source)).map(x => KN5.create(x)));
+
+    for (let x of extraModelsRaw) {
+      const filename = `${path.dirname(source)}/${x}`;
+      if (!fs.existsSync(filename)) {
+        this.error(`Included file is missing: “${filename.substr(this.dataDir.length + 1)}”`);
+        continue;
+      }
+
+      const stats = await fs.promises.stat(filename);
+      if (stats.size > 50e6) {
+        this.error(`Included file is too big: “${filename.substr(this.dataDir.length + 1)}”`, null, `Please try to avoid reusing original meshes in an extension KN5 too much.`);
+        continue;
+      }
+
+      let info = await KN5.create(filename);
+      if (!info) {
+        this.error(`Included file is invalid: “${filename.substr(this.dataDir.length + 1)}”`);
+        continue;
+      }
+
+      let duplicated = Object.keys(info.texturesMap).filter(x => originalModels.some(y => y.texturesMap.hasOwnProperty(x)));
+      if (duplicated.length > 0) {
+        extraModels.push({ key: x, file: filename, dataCallback: ((filename, duplicated) => KN5.excludeTextures(filename, duplicated)).bind(null, filename, duplicated) });
+      } else {
+        extraModels.push({ key: x, file: filename });
+      }
+    }
+
     return await this.packFiles(id, fullConfig.checksum, [
       { key: `${id}.ini`, data: fullConfig.data }
-    ].concat(extraModels.map(x => ({ key: x, file: `${path.dirname(source)}/${x}` })).filter(x => {
-      if (!fs.existsSync(x.file)) {
-        this.warn(`Included file is missing: ${x.file.substr(this.dataDir.length + 1)}`);
-        return false;
-      }
-      return true;
-    })));
+    ].concat(extraModels));
   }
 }
 
