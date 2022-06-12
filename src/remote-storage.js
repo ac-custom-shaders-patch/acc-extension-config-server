@@ -22,7 +22,7 @@ async function connect() {
     autoReconnect: true,
     secure: false
   });
-  return ftp;
+  return _ftp;
 }
 
 let busy = false;
@@ -44,9 +44,11 @@ class RemoteStorage {
     const ftp = await connect();
     if (!ftp) return;
 
-    let remoteFilename = `/patch/_${this.dir}/${id}`;
+    let remoteFilename = `/acstuff.ru/public_html/patch/_${this.dir}/${id}`;
     if (typeof data === 'string') {
+      fs.utimesSync(data, new Date(), new Date());
       await ftp.upload(fs.createReadStream(data), remoteFilename);
+      // $.echo(β.yellow(`Uploaded: ${data}→${remoteFilename}`)); 
     } else {
       const readable = new Readable();
       readable._read = () => { }
@@ -58,17 +60,20 @@ class RemoteStorage {
   }
 
   async sync(manifest, warnings, files) {
-    const ftp = await connect();
-    if (!ftp) return;
-
     if (busy) {
       queue = queue.filter(x => x.instance != this);
       queue.push({ instance: this, manifest: manifest, warnings: warnings, files: files });
       return;
     }
 
+    let ftp = null;
+
     try {
       busy = true;
+
+      ftp = await connect();
+      if (!ftp) return;
+
       await ftp.ensureDir(`/patch/_${this.dir}/warnings`);
       await this.store(warnings.svg, 'warnings/icon.svg');
       await this.store(warnings.html, 'warnings/list.html');
@@ -89,6 +94,8 @@ class RemoteStorage {
           let remoteDate = new Date(+removeDateRaw - removeDateRaw.getTimezoneOffset() * 60e3 + 5 * 60e3);
           if (stats.mtime > remoteDate || existing.size != stats.size) {
             $.echo(β.green(`Changed: ${id}`));
+            // $.echo(β.green(`Changed: ${id} (local: ${stats.mtime.toISOString()}, ${stats.size} bytes; remote: ${remoteDate.toISOString()}, ${existing.size} bytes)`));
+            // $.echo(β.green(files[id]));
             await this.store(files[id], name);
           }
         }
@@ -103,6 +110,7 @@ class RemoteStorage {
       $.fail(e)
     } finally {
       busy = false;
+      ftp && ftp.close();
     }
   }
 }

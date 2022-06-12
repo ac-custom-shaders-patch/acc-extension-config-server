@@ -1,7 +1,7 @@
 const DataProvider = require('./data-provider');
 const StreamZip = require('node-stream-zip');
 
-class DataTracksVao extends DataProvider {
+class DataCarsVao extends DataProvider {
   async prepareContext(){ 
     return { 
       contributors: await this.loadContributors()
@@ -42,4 +42,4 @@ class DataTracksVao extends DataProvider {
   }
 }
 
-module.exports = DataTracksVao;
+module.exports = DataCarsVao;

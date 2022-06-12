@@ -32,7 +32,7 @@ class Syncer extends EventEmitter {
     $.popd();
 
     setTimeout(() => this.emit('update'), 1e2);
-    if (config.dataAutoPull) setInterval(this.refresh, 5 * 60e3);
+    if (config.dataAutoPull && config.dataContinuousMonitoring) setInterval(this.refresh, 5 * 60e3);
   }
 
   async refresh(){
@@ -52,11 +52,12 @@ class Syncer extends EventEmitter {
         return `Repo “${this.gitUrl}”: ${x}`
       }
     } })){
-      $.fail(`failed to pull “${this.gitUrl}”`);
-    }
-    $.popd();
-    if (changed){
-      setTimeout(() => this.emit('update'), 1e2);
+      $.echo(β.red(`failed to pull “${this.gitUrl}”`));
+    } else {
+      $.popd();
+      if (changed){
+        setTimeout(() => this.emit('update'), 1e2);
+      }
     }
     isBusy = false;
 

@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/ac-custom-shaders-patch/acc-extension-config-server#readme",
   "dependencies": {
+    "array-flat-polyfill": "^1.0.1",
     "basic-ftp": "^3.4.4",
     "binary-parser": "^1.3.2",
     "jszip": "^3.2.1",

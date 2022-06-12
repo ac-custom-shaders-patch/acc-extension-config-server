@@ -6,6 +6,9 @@ class DataBackgrounds extends DataProvider {
   }
 
   async listEntries(dataDir, context){ 
+    for (let f of await $.globAsync(`${dataDir}/*/+([0-9]).jpg`)){
+      $.echo(f);
+    }
     return await $.globAsync(`${dataDir}/*/+([0-9]).jpg`); 
   }
 

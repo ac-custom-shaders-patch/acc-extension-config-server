@@ -9,9 +9,11 @@ if (fs.existsSync(configPath)){
   module.exports = {
     versionOffset: +(process.env['ACEXTDATA_VERSION_OFFSET'] || 0),
     autoReload: false,
-    dataAutoReload: true,
+    dataAutoReload: false,
     dataAutoPull: 0,
+    dataContinuousMonitoring: false,
     printSource: false,
+    acRootDir: process.env['ACEXTDATA_ACROOTDIR'],
     dataDir: process.env['ACEXTDATA_STORAGE'],
     tempDir: process.env['ACEXTDATA_STORAGE'] + '/temp',
     serverPort: +(process.env['ACEXTDATA_SERVER_PORT'] || 0),

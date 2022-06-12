@@ -254,9 +254,9 @@ class DataTracksConfigs extends DataProvider {
   }
 
   async preRefresh() {
-    for (let file of await $.globAsync(`${this.dataDir}/common/*.ini`)) {
-      await this.analyzeForWarnings(file, this.getSourceUrl(file.substr(this.dataDir.length + 1)));
-    }
+    // for (let file of await $.globAsync(`${this.dataDir}/common/*.ini`)) {
+    //   await this.analyzeForWarnings(file, this.getSourceUrl(file.substr(this.dataDir.length + 1)));
+    // }
   }
 
   async processEntry(source, relativeName, context) {
@@ -265,7 +265,12 @@ class DataTracksConfigs extends DataProvider {
 
     let fullConfig = await this.getConfigInfo(source, id);
     let parsedConfig = INIHelper.parseIni(fullConfig.data);
-    await this.analyzeForWarnings(source, null, parsedConfig);
+    // await this.analyzeForWarnings(source, null, parsedConfig);
+
+    if (fs.existsSync(`${config.acRootDir}/content/tracks/${id}`)){
+      await $[`${config.dataDir}/kn5-replacement-optimizer.exe`](`${config.acRootDir}/content/tracks/${id}`, { cwd: this.dataDir });
+    }
+
     let info = await this.packExtraModels(id, source, fullConfig, parsedConfig);
     return this.includeAboutInfo(info, parsedConfig);
   }

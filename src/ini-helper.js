@@ -65,13 +65,15 @@ function resolveIncludesWithFiles(filename, dataDir, sourceUrl, warningCallback)
 
   do {
     toAdd = [];
-    data = data.replace(/\bINCLUDE[ \t]*=[ \t]*(.+)/, (_, f) => { toAdd.push.apply(toAdd, f.split(',').map(x => x.trim())); return ''; });
+    data = data.replace(/\bINCLUDE[ \t]*=[ \t]*((?!common\/)\S.*)/, (_, f) => { toAdd.push.apply(toAdd, f.split(',').map(x => x.trim())); return ''; });
     data = toAdd.map(findReferenced).join('\n\n') + '\n\n' + data;
   } while (toAdd.length);
 
   data = data.replace(/\w*LUT[ \t]*=[ \t]*([\w-]+\.lut)/, (_, f) => 'LUT=' + (inlineLut(findReferenced(f)) || f));
   const prefix = `; config was prepared automatically. source:\n; ${sourceUrl}\n`;
-  const cleaned = data.replace(/;.+|\r/g, ``).replace(/\[\w+\]\s*\[/g, `[`).replace(/[ \t]*=[ \t]*/g, `=`).split(`\n`).map(x => x.trim()).filter(x => x).join(`\n`);
+  
+  // const cleaned = data.replace(/;.+|\r/g, ``).replace(/[ \t]*=[ \t]*/g, `=`).split(`\n`).map(x => x.trim()).filter(x => x).join(`\n`);
+  const cleaned = data.trim();
   return { data: prefix + cleaned, files: fullFilesList };
 }
 

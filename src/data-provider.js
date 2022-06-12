@@ -27,6 +27,7 @@ class DataProvider extends EventEmitter {
 
     this.syncer = syncer;
     this.subDir = subDir;
+    this.storageGroup = subDir;
     this.remoteStorage = remoteStorage;
     this.dataDir = syncer.getDir(subDir);
     this.tempDir = subDir ? `${config.tempDir}/${subDir}` : `${config.tempDir}`;
@@ -83,7 +84,7 @@ class DataProvider extends EventEmitter {
     }
 
     let stats = await fs.promises.stat(filename);
-    let fingerprint = +stats.mtime ^ stats.size;
+    let fingerprint = (+stats.mtime * 397) ^ stats.size;
     let storageKeyFingerprint = `fileInfo:fingerprint:${k}`;
     let storageKeyChecksum = `fileInfo:checksum:${k}`;
     if (storage[storageKeyFingerprint] === fingerprint) {
@@ -99,8 +100,8 @@ class DataProvider extends EventEmitter {
 
   async extendFileInfo(info, extraFiles) {
     let checksum = parseInt(info.checksum, 32);
-    for (let included of extraFiles.unique()) {
-      checksum ^= parseInt((await this.getFileInfo(included)).checksum, 32);
+    for (let included of extraFiles.slice(1).unique()) {
+      checksum = (checksum * 397) ^ parseInt((await this.getFileInfo(included)).checksum, 32);
     }
     return Object.assign({}, info, { checksum: Math.abs(checksum).toString(32) });
   }
@@ -205,14 +206,14 @@ class DataProvider extends EventEmitter {
   }
 
   _getCurrentVersionInfo(id) {
-    let storageKeyChecksum = `${this.subDir}/${id}.checksum`;
-    let storageKeyVersion = `${this.subDir}/${id}.version`;
+    let storageKeyChecksum = `${this.storageGroup}/${id}.checksum`;
+    let storageKeyVersion = `${this.storageGroup}/${id}.version`;
     return { version: +(storage[storageKeyVersion] || 0) + config.versionOffset, checksum: storage[storageKeyChecksum] };
   }
 
   setVersionForInfo(info, id) {
-    let storageKeyChecksum = `${this.subDir}/${id}.checksum`;
-    let storageKeyVersion = `${this.subDir}/${id}.version`;
+    let storageKeyChecksum = `${this.storageGroup}/${id}.checksum`;
+    let storageKeyVersion = `${this.storageGroup}/${id}.version`;
     let version = +(storage[storageKeyVersion] || 0);
     let isNew = false;
     if (info.checksum !== storage[storageKeyChecksum]) {
@@ -339,12 +340,14 @@ class DataProvider extends EventEmitter {
   async _refreshInner() {
     const context = await this.prepareContext();
     let result = {};
+    // let garbage = fs.readdirSync(this.tempDir);
     for (let file of (await this.listEntries(this.dataDir, context)).unique()) {
       try {
         this._currentEntrySourceUrl = this.getSourceUrl(file.substr(this.dataDir.length + 1));
         let R = await this.processEntry(file, file.substr(this.dataDir.length + 1), context)
         if (R != null) {
           result[R.id] = R;
+          // garbage = garbage.filter(x => x != R.id + '.zip');
           R.sourceUrl = this._currentEntrySourceUrl;
           delete R.id;
         }
@@ -354,6 +357,7 @@ class DataProvider extends EventEmitter {
         this._currentEntrySourceUrl = null;
       }
     }
+    // $.echo(garbage);
     return result;
   }
 
@@ -415,7 +419,7 @@ class DataProvider extends EventEmitter {
   async packExtraModels(id, source, fullConfig, parsedConfig) {
     let extraModelsRaw = await INIHelper.getExtraModels(parsedConfig);
     let extraModels = [];
-    let originalModels = await Promise.all((await this.getOriginalModels(source)).map(x => KN5.create(x)));
+    // let originalModels = await Promise.all((await this.getOriginalModels(source)).map(x => KN5.create(x)));
 
     for (let x of extraModelsRaw) {
       const filename = `${path.dirname(source)}/${x}`;
@@ -424,21 +428,28 @@ class DataProvider extends EventEmitter {
         continue;
       }
 
-      const stats = await fs.promises.stat(filename);
-      if (stats.size > 50e6) {
-        this.error(`Included file is too big: “${filename.substr(this.dataDir.length + 1)}”`, null, `Please try to avoid reusing original meshes in an extension KN5 too much.`);
-        continue;
-      }
+      // const stats = await fs.promises.stat(filename);
+      // if (stats.size > 50e6) {
+      //   this.warn(`Included file is too big: “${filename.substr(this.dataDir.length + 1)}”`, null, `Please try to avoid reusing original meshes in an extension KN5 too much.`);
+      // }
 
-      let info = await KN5.create(filename);
-      if (!info) {
-        this.error(`Included file is invalid: “${filename.substr(this.dataDir.length + 1)}”`);
-        continue;
-      }
+      // let info = await KN5.create(filename);
+      // if (!info) {
+      //   this.error(`Included file is invalid: “${filename.substr(this.dataDir.length + 1)}”`);
+      //   continue;
+      // }
 
-      let duplicated = Object.keys(info.texturesMap).filter(x => originalModels.some(y => y.texturesMap.hasOwnProperty(x)));
-      if (duplicated.length > 0) {
-        extraModels.push({ key: x, file: filename, dataCallback: ((filename, duplicated) => KN5.excludeTextures(filename, duplicated)).bind(null, filename, duplicated) });
+      // let duplicated = Object.keys(info.texturesMap).filter(x => originalModels.some(y => y.texturesMap.hasOwnProperty(x)));
+      // if (duplicated.length > 0) {
+      //   extraModels.push({ key: x, file: filename, dataCallback: ((filename, duplicated) => KN5.excludeTextures(filename, duplicated)).bind(null, filename, duplicated) });
+      // } else {
+      //   extraModels.push({ key: x, file: filename });
+      // }
+
+      const optimizedFilename = path.dirname(filename) + '/.optimized/' + path.basename(filename);
+      if (fs.existsSync(optimizedFilename)){
+        $.echo('Using optimized model: ' + optimizedFilename);
+        extraModels.push({ key: x, file: optimizedFilename });
       } else {
         extraModels.push({ key: x, file: filename });
       }

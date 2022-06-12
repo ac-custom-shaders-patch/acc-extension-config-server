@@ -209,5 +209,6 @@ global.β = { config: { colorful: true } };
 // From https://github.com/robertklep/top-level-await:
 const Module = require('module').Module;
 Module.wrap = function(...args){
-  return this.apply(Module, [ `try { ${args[0]}; } catch (e){ $.fail(e); }` ].concat(args.slice(1))).replace(/^\(function/, '(async function');
+  return this.apply(Module, [ `!(async function(){ try {\n${args[0].replace(/^#/, '//')};\n} catch (e){ $.fail(e); } })()` ].concat(args.slice(1)));
+  // return this.apply(Module, [ `try {\n${args[0]};\n} catch (e){ $.fail(e); }` ].concat(args.slice(1))).replace(/^\(function/, '(async function');
 }.bind(Module.wrap);
